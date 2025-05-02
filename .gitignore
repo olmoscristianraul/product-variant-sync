@@ -1,0 +1,21 @@
+# Archivos de configuración con secretos (usar .template para ejemplos)
+config.ini
+#products_to_sync.csv
+
+# Directorio de logs generado por el script
+#logs/
+
+# Archivos de caché y compilados de Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Archivos específicos de entornos virtuales (si usas uno)
+venv/
+env/
+*.env
+.env
+
+# Otros (dependiendo de tu sistema operativo o editor)
+.DS_Store
+*.swp
