@@ -203,3 +203,41 @@ def get_or_create_attribute_value(models_o17, db_name_o17, uid_o17, o17_pass, va
         else:
             logging.error(f"No se pudo crear valor '{normalized_name}' (AttrID {attribute_id_o17}) o17. Resultado RPC: {new_value_id}.");
             return None
+
+def find_or_create_template(models, db, uid, password, search_domain, create_vals, read_fields):
+    """
+    Busca un registro en Odoo usando el dominio proporcionado.
+    Si no se encuentra, crea un nuevo registro con los valores proporcionados.
+    Finalmente, lee y devuelve los datos del registro (existente o creado).
+
+    :param models: Objeto 'models' de la conexión Odoo.
+    :param db: Nombre de la base de datos Odoo.
+    :param uid: ID de usuario de Odoo.
+    :param password: Contraseña del usuario de Odoo.
+    :param search_domain: Lista de tuplas que define el dominio de búsqueda.
+    :param create_vals: Diccionario de valores para crear el registro si no se encuentra.
+    :param read_fields: Lista de campos a leer del registro.
+    :return: Diccionario con los datos del registro encontrado o creado, o None si hay un error RPC.
+    """
+    try:
+        record_ids = models.execute_kw(db, uid, password, 'product.template', 'search', [search_domain], {'limit': 1})
+        if record_ids:
+            _logger = logging.getLogger(__name__) # Asegúrate de que el logger esté accesible aquí
+            _logger.debug(f"Template encontrado con IDs: {record_ids}")
+            read_result = models.execute_kw(db, uid, password, 'product.template', 'read', [record_ids[0]], {'fields': read_fields})
+            return read_result[0] if read_result else None
+        else:
+            _logger = logging.getLogger(__name__) # Asegúrate de que el logger esté accesible aquí
+            _logger.debug(f"Template no encontrado. Creando con valores: {create_vals}")
+            new_record_id = models.execute_kw(db, uid, password, 'product.template', 'create', [create_vals])
+            if new_record_id:
+                _logger.info(f"Template creado con ID: {new_record_id}")
+                read_result = models.execute_kw(db, uid, password, 'product.template', 'read', [new_record_id], {'fields': read_fields})
+                return read_result[0] if read_result else None
+            else:
+                _logger.error("Fallo al crear el template.")
+                return None
+    except Exception as e:
+        _logger = logging.getLogger(__name__) # Asegúrate de que el logger esté accesible aquí
+        _logger.error(f"Error RPC en find_or_create_template: {e}", exc_info=True)
+        return None

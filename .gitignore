@@ -3,7 +3,7 @@ config.ini
 #products_to_sync.csv
 
 # Directorio de logs generado por el script
-#logs/
+logs/
 
 # Archivos de caché y compilados de Python
 __pycache__/

@@ -37,7 +37,7 @@ def load_config():
         loaded_config['CSV_FILENAME'] = config.get('SYNC_SETTINGS', 'CSV_FILENAME', fallback='products_to_sync.csv')
 
         # Validar claves requeridas
-        required_keys = [k for k in loaded_config if k != 'CSV_FILENAME']
+        required_keys = [k for k in loaded_config if k not in ['CSV_FILENAME']] # CSV_FILENAME is optional
         missing = [k for k in required_keys if loaded_config[k] is None]
         if missing:
             msg = f"Error: Faltan claves de configuración requeridas en '{CONFIG_FILENAME}': {', '.join(missing)}"
@@ -45,9 +45,9 @@ def load_config():
             except NameError: print(f"ERROR: {msg}", file=sys.stderr)
             sys.exit(1)
 
-        # Loguear éxito si es posible
+        # Loguear éxito si es posible (solo debug, ya que el logging completo se configura en main_sync)
         try: logging.debug(f"Configuración cargada exitosamente desde {CONFIG_FILENAME}")
-        except NameError: pass
+        except NameError: pass # Si logging aún no está configurado
 
         return loaded_config
 
@@ -62,5 +62,7 @@ def load_config():
         except NameError: print(f"ERROR: {msg}", file=sys.stderr)
         sys.exit(1)
 
-# Cargar la configuración cuando se importa el módulo
+# Cargar la configuración al importar el módulo
 config_values = load_config()
+
+# (Nota: La configuración completa del logging se hará en main_sync.py)
