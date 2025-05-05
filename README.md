@@ -353,3 +353,151 @@ Campos Sincronizados: Aunque se añadió sincronización selectiva, el conjunto 
 **load_all no Implementado:** El modo para cargar todos los productos activos de Odoo 16 a la DB (--mode load_all) aún no está implementado en esta fase.
 **Optimización de Carga (run_changed):** Para bases de datos Odoo 16 muy grandes con muchos cambios, obtener todos los códigos cambiados de una vez en get_changed_item_codes podría consumir mucha memoria o tiempo. Una mejora futura sería implementar paginación (lotes) en esta consulta.
 **Historial de Variantes en DB:** La DB solo almacena el estado del template. Para un historial detallado de cambios por variante (qué variante específica cambió cuándo y cómo), sería necesario modificar el esquema de la DB y la lógica de sync_logic para registrar eventos a nivel de variante.
+
+
+## Paso a paso detallado de cómo usar cada una de las funcionalidades del script de sincronización, incluyendo la interacción con la base de datos SQLite:
+
+Pre-requisitos:
+
+Asegúrate de tener tus instancias de Odoo 16 y Odoo 17 corriendo y configuradas correctamente en el archivo config.ini.
+Verifica que los archivos del script (main_sync.py, sync_logic.py, sync_db.py, odoo_xmlrpc.py, config_loader.py) estén en el mismo directorio.
+Paso a Paso para Usar las Funcionalidades:
+
+1. Cargar ítems desde un archivo CSV (--mode load_csv):
+
+Prepara el archivo CSV: Crea un archivo llamado products_to_sync.csv en el mismo directorio que los scripts. Este archivo debe contener una sola línea con los default_code de los productos que deseas sincronizar, separados por comas. Por ejemplo:
+Fragmento de código
+
+CODE001,CODE002,DEMO_PRODUCT
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode load_csv
+Verifica:
+Revisa el log en el directorio logs/. Busca líneas que indiquen que los códigos fueron leídos del CSV y añadidos a la base de datos con estado pending.
+Consulta la base de datos SQLite (sync_state.db) para verificar los ítems pendientes:
+Bash
+
+sqlite3 sync_state.db
+SELECT code, status, source_type FROM sync_items WHERE status = 'pending' AND source_type = 'csv';
+.quit
+2. Ejecutar la sincronización para ítems Pendientes (--mode run_pending):
+
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode run_pending
+Verifica:
+Revisa el log para ver el procesamiento de los ítems pendientes. Busca mensajes de conexión a Odoo 16 y Odoo 17, la búsqueda de productos y la creación/actualización en Odoo 17.
+Consulta la base de datos para verificar el estado actualizado de los ítems:
+Bash
+
+sqlite3 sync_state.db
+SELECT code, status FROM sync_items WHERE code IN ('CODE001', 'CODE002', 'DEMO_PRODUCT');
+.quit
+El estado debería ser succeeded si la sincronización fue exitosa, o failed si hubo algún problema.
+Verifica en Odoo 17: Accede a tu instancia de Odoo 17 y comprueba que los productos correspondientes a los default_code se hayan creado o actualizado correctamente.
+3. Ejecutar la sincronización para ítems Fallidos (--mode run_failed):
+
+Simula un fallo (opcional): Si no tienes ítems en estado failed, puedes cambiar el estado de alguno manualmente en la base de datos:
+Bash
+
+sqlite3 sync_state.db
+UPDATE sync_items SET status = 'failed', error_message = 'Simulating failure' WHERE code = 'CODE001';
+.quit
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode run_failed
+Verifica:
+Revisa el log para ver el intento de re-procesamiento del ítem fallido.
+Consulta la base de datos para verificar el estado actualizado:
+Bash
+
+sqlite3 sync_state.db
+SELECT code, status, error_message FROM sync_items WHERE code = 'CODE001';
+.quit
+4. Ejecutar la sincronización para ítems con códigos específicos (--mode run_codes --codes):
+
+Asegúrate de que los códigos existan en la DB (puedes cargarlos con load_csv primero).
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode run_codes --codes CODE002 DEMO_PRODUCT
+Verifica:
+Revisa el log para ver el procesamiento específico de los códigos proporcionados.
+Consulta la base de datos para verificar el estado:
+Bash
+
+sqlite3 sync_state.db
+SELECT code, status FROM sync_items WHERE code IN ('CODE002', 'DEMO_PRODUCT');
+.quit
+Verifica en Odoo 17.
+5. Ejecutar la sincronización para ítems cambiados recientemente en Odoo 16 (--mode run_changed --days):
+
+Haz un cambio en un producto de Odoo 16: Edita el nombre, precio u otro campo de un producto (por ejemplo, DEMO_PRODUCT) en tu instancia de Odoo 16 y guarda.
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode run_changed --days 1
+Verifica:
+Revisa el log. Busca mensajes que indiquen la consulta a Odoo 16 por cambios y el posterior procesamiento del producto modificado. El source_type en la base de datos para este ítem podría ser changed_o16.
+Consulta la base de datos:
+Bash
+
+sqlite3 sync_state.db
+SELECT code, status, source_type FROM sync_items WHERE code = 'DEMO_PRODUCT';
+.quit
+Verifica en Odoo 17: Comprueba que el cambio realizado en Odoo 16 se haya reflejado en Odoo 17.
+Prueba con sincronización selectiva de precio: Cambia solo el precio en Odoo 16 y ejecuta:
+Bash
+
+python3 main_sync.py --mode run_changed --days 1 --sync-fields price_only
+Verifica en el log que solo el precio se intenta actualizar en Odoo 17.
+6. Limpiar la tabla de ítems en la base de datos (--mode clear_db):
+
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode clear_db
+Confirma la acción cuando se te pregunte en la terminal.
+Verifica:
+Consulta la base de datos:
+Bash
+
+sqlite3 sync_state.db
+SELECT COUNT(*) FROM sync_items;
+.quit
+El resultado debería ser 0.
+7. Mostrar el estado actual de la base de datos (--mode status):
+
+Ejecuta el script:
+Bash
+
+python3 main_sync.py --mode status
+Verifica: La salida en la terminal mostrará un resumen de cuántos ítems hay en cada estado (pending, processing, succeeded, failed, skipped). Puedes comparar estos números con los resultados de tus consultas directas a la base de datos con sqlite3.
+Interacción Adicional con la Base de Datos SQLite:
+
+Marcar un ítem como pendiente para re-sincronizar:
+
+Bash
+
+sqlite3 sync_state.db
+UPDATE sync_items SET status = 'pending', error_message = NULL, last_sync_success = NULL WHERE code = 'DEMO_PRODUCT';
+.quit
+Luego puedes ejecutar python3 main_sync.py --mode run_pending.
+
+Ver ítems cargados desde CSV que fallaron:
+
+Bash
+
+sqlite3 sync_state.db
+SELECT code, error_message FROM sync_items WHERE status = 'failed' AND source_type = 'csv';
+.quit
+Ver la última vez que un producto se sincronizó con éxito:
+
+Bash
+
+sqlite3 sync_state.db
+SELECT code, last_sync_success FROM sync_items WHERE status = 'succeeded' AND code = 'DEMO_PRODUCT';
+.quit
